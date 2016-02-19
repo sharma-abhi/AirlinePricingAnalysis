@@ -1,0 +1,104 @@
+---
+title: "Assignment 2"
+author: "Abhijeet Sharma, Afan Ahmad Khan"
+date: "Friday, January 29, 2016"
+output: html_document
+---
+### INTRODUCTION
+```
+As data sizes will increase the single machine version of our A1 program will not scale. We have developed a version of A1 using the Hadoop Map Reduce API. 
+The program takes a hadoop directory path as input containing multiple gzipped csv files and creates a plot displaying the average ticket prices of all airlines per month(restricted for airlines active in 2015).
+
+Fine print: 
+1. This is a Group assignment of two students. 
+2. We Provide code that can run in pseudo-distributed mode as well as on EMR. 
+3. We have produced a graph that plots the average ticket price for each month for each airline using R. 
+4. We have included a script that executes everything and produces the graph. For example, if you use the Unix make command, you should have two targets pseudo and cloud such that typing make pseudo will create a HDFS file system, start hadoop, run your job, get the output, and produce the graph. Typing  "make cloud"" will run the code on EMR. 
+5. We have Only plotted airlines with flights in 2015, we have limited ourselves to the 10 airlines with the most flights overall(as noted in the question). 
+6. This one page report documents our implementation and describes our results. The report is automatically constructed as part of running the project to include the plot.
+7. We have submitted a tar.gz file which unpacks into a directory name "Sharma_Khan_A2". That directory contains a README file that explains how to build and run our code.
+```
+
+### SYSTEM SPECIFICATION( for PSEUDO-DISTRIBUTED HADOOP):
+```
+1. Java 1.7.0_79
+2. Ubuntu 14.04 64-bit
+3. 8GB RAM
+4. Pandoc (https://github.com/jgm/pandoc/releases/tag/1.16.0.2)
+4. R Packages:
+  4.1 Rcpp
+  4.2 ggplot2
+  4.3 knitr
+  4.4 plyr
+```
+
+Install the required R Packages
+```{r, eval=FALSE}
+install.packages("Rcpp")
+install.packages("ggplot2")
+install.packages("plyr")
+install.packages("rmarkdown")
+```
+
+The R Markdown document can be run individually with the below command.
+```{r, eval=FALSE}
+Rscript -e "rmarkdown::render('Assignment2_Report.Rmd')"
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(ggplot2)
+library(plyr)
+
+# Read all the hadoop output files in the "output" directory
+files <- dir("output", pattern='-r-', full.names = TRUE)
+
+# Initialize an empty dataframe
+alldf <- data.frame()
+# Read through all files and add all records to a single dataframe
+for (i in files){
+  df <- read.csv(i, header=FALSE, sep="\t", colClasses=c("character", "numeric", "integer", "integer", "logical"))
+  alldf <- rbind(alldf, df)
+}
+# Assign header names to the dataframe
+names(alldf) <- c("CarrierCode", "Average", "Month", "Count", "IsActive")
+# Create a "Sum" column which is avg * count (useful for aggregating records)
+alldf$Sum <- alldf$Average*alldf$Count
+# Calculate average ticket price column for particular carrier and month
+finaldf <- ddply(alldf,  ~ alldf$CarrierCode + alldf$Month, summarise, Avg=sum(Sum)/sum(Count))
+names(finaldf) <- c("CarrierCode", "Month", "Avg")
+# calculate whether carriers were active or not in 2015, active = 1, non-active = 0
+activedf <- ddply(alldf,  ~ alldf$CarrierCode, summarise, log=sum(IsActive))
+# List all the carrier codes which are active in 2015
+active <- activedf[activedf$log == 1,][, 1]
+# Calculate total count of all flights
+totaldf <- ddply(alldf,  ~ alldf$CarrierCode, summarise, totalCount=sum(Sum))
+# Filter flights from primary dataframe which are active in 2015
+totaldf <- totaldf[totaldf[, 1] %in% active, ]
+ordered <- totaldf[order(totaldf$totalCount, decreasing = TRUE),][,1]
+# List top 10 carriers which have most no. of flights and are active
+highestActive <- ordered[1:10]
+# Filter on top 10 carriers which have most no. of flights and are active
+absfinaldf <- finaldf[finaldf$CarrierCode %in% highestActive, ]
+```
+
+### Plot
+```{r, echo=FALSE}
+ggplot(data=absfinaldf, aes(x=Month, y=Avg, color=CarrierCode)) +
+  geom_line() + 
+  geom_point(size=1) +
+  xlab("Avg. Ticket Price(in $)") + ylab("Month") +
+  ggtitle("Line Plot showing avg. ticket prices of top 10 flights active in 2015") +
+  scale_x_continuous(breaks=seq(1,12,1))
+```
+
+### Implementation
+```
+1. We have implemented a map reduce system whereby we have a Tokenizer Mapper class which extends the Mapper class.
+2. The Mapper calls the map method with "Carrier Code" as Key and a record of a csv file as Value.
+3. The record is checked for sanity tests and Intermediate Key, Value Pairs are sent to the Reducer
+4. The Key is the carrier code of the record. The Intermediate value is a Text object containing the price, Month and Year of a single record.
+5. The reducer calls the reduce method passing an iterable of values. The reducer calculates the average price of a carrier per Month and outputs to a specific output file.
+6. The R script reads the multiple output files and filters on the top 10 most frequency flights which were active in 2015.
+7. Plot is drawn with ggplot2 package and displayed
+8. Make file is created to automate all the above 7 steps.
+```

@@ -1,0 +1,11 @@
+"config","time"
+"threading_multi_mean",40.83
+"threading_multi_median",46.62
+"threading_single_mean",110.49
+"threading_single_median",123.67
+"pseudo_fast",141.75
+"pseudo_mean",152.63
+"pseudo_median",168.92
+"cloud_fast",516.438
+"cloud_median",520.527
+"cloud_mean",648.171

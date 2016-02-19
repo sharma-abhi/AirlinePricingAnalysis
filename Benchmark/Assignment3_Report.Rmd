@@ -1,0 +1,155 @@
+---
+title: "Assignment 3"
+author: "Abhijeet Sharma, Afan Ahmad Khan"
+date: "Friday, February 6, 2016"
+output: pdf_document
+---
+### INTRODUCTION
+```{}
+The program takes a hadoop directory path as input containing multiple gzipped csv files and creates
+a plot displaying the average ticket prices of all airlines per month(restricted for airlines active 
+in 2015).
+The program also benchmarks and compares the cost of computing (A) mean and (B) median price, and 
+(C) fast median for (i) single threaded Java, (ii) multi-threaded Java, (iii) pseudo-distributed MR, 
+and (iv) distributed MR.
+The program evaluates the performance of the following configurations i-A, i-B, ii-A, ii-B, iii-A, iii-B, iii-C, 
+iv-A, iv-B, iv-C.
+
+Fine print: 
+1. This is a Group assignment of two students. 
+2. We Provide code that can run in single-threading, multi-threading, pseudo-distributed mode as well
+as on EMR. 
+3. We have produced a graph that plots and compares the cost of computing (A) mean and (B) median price, 
+and (C) fast median for (i) single threaded Java, (ii) multi-threaded Java, (iii) pseudo-distributed
+MR, and (iv) distributed MR.
+4. We have included a script that executes everything and produces the graph. For example, if you
+use the Unix make command, you  have two targets pseudo and cloud such that typing make pseudo
+will create a HDFS file system, start hadoop, run your job, get the output, and produce the graph. 
+Typing  "make cloud-mean"" will run the code on EMR for mean calculation. 
+5. We have only output airlines with flights in 2015.
+6. This one page report documents our implementation and describes our results. The report is 
+automatically constructed as part of running the project to include the plot.
+7. We have submitted a tar.gz file which unpacks into a directory name "Sharma_Khan_A3". The directory 
+contains a README file that explains how to build and run our code.
+```
+
+### SYSTEM SPECIFICATION:
+```
+1. Java 1.7.0_79
+2. Ubuntu 14.04 64-bit
+3. 8GB RAM
+4. Pandoc (https://github.com/jgm/pandoc/releases/tag/1.16.0.2)
+4. R Packages:
+4.1 Rcpp
+4.2 R.utils
+4.3 ggplot2
+4.4 rmarkdown
+4.5 plyr
+```
+
+Install the required R Packages
+```{r, eval=FALSE}
+install.packages("Rcpp")
+install.packages("R.utils")
+install.packages("rmarkdown")
+install.packages("ggplot2")
+install.packages("plyr")
+```
+
+The R Markdown document can be run individually with the below command.
+```{r, eval=FALSE}
+Rscript -e "rmarkdown::render('Assignment3_Report.Rmd')"
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(ggplot2)
+library(plyr)
+library(R.utils)
+
+# Initialize an empty dataframe
+alldf <- data.frame()
+
+# Read the individual time files from Threading/Hadoop codes
+readTimes <- function(filename){
+  # Fetch the last 6th element which correposnds to the time
+  x <- scan(file = filename, what=character())
+  elapsed <- gsub("elapsed", "", x[length(x) - 6])
+  #elapsed <- gsub("elapsed", "", scan(file = filename, what=character())[3])
+  elapsed <- strsplit(elapsed, ":")[[1]]
+  mins <- as.numeric(elapsed[1]) * 60
+  seconds <- as.numeric(elapsed[2])
+  # split the filename to extract configuration
+  config.name <- strsplit(filename, "/")[[1]][2]
+  config.name <- strsplit(config.name, '[.]')[[1]][1]
+  config.name <- strsplit(config.name, 'time_')[[1]][2]
+  df <- data.frame(config=config.name, time=mins+seconds)
+  return (df)
+}
+
+# Read all the Threading/Hadoop time files in the "time" directory
+timeFiles <- dir("time", pattern='time_', full.names = TRUE)
+# Read through all files and add all records to a single dataframe
+for (file in timeFiles){
+  df <- readTimes(file)
+  alldf <- rbind(alldf, df)
+}
+
+readCloudTimes <- function(filename){
+   # Fetch the last 6th element which correposnds to the time
+  all.lines <- readLines(filename)
+  start.line <- grep("JOB_SUBMITTED",all.lines, value=TRUE)
+  start.time <- as.numeric(strsplit(strsplit(start.line, ",")[[2]][5], ":")[[1]][2])
+  finish.line <- grep("JOB_FINISHED",all.lines, value=TRUE)
+  finish.time <- as.numeric(strsplit(strsplit(finish.line, ",")[[2]][3], ":")[[1]][2])
+  elapsed.time <- finish.time - start.time
+  # Convert from milliseconds to seconds
+  elapsed.time <- elapsed.time/1000
+  # split the filename to extract configuration
+  config.name <- paste("cloud", strsplit(filename, "/")[[1]][3], sep="_")
+  df <- data.frame(config=config.name, time=elapsed.time)
+  return (df)
+}
+
+# Read all the AWS Cloud time files in the "logs" directory
+cloud.log.dirs <- list.dirs('logs/', recursive=FALSE)
+
+for (dir in cloud.log.dirs){
+  dir.list <- list.dirs(dir[1], recursive=TRUE)
+  main.dir <- dir.list[length(dir.list)]
+  filename <- list.files(main.dir, pattern=".jhist.gz", recursive=FALSE)
+  filename <- paste(main.dir, '/', filename, sep="")
+  gunzip(filename, ext="gz", remove=FALSE, overwrite=TRUE)
+  filename=gsub(".gz", "", filename)
+  df <- readCloudTimes(filename)
+  alldf <- rbind(alldf, df)
+}
+alldf <- alldf[order(alldf$time), ]
+write.csv(alldf, file="time_benchmark.csv", row.names = FALSE) 
+```
+
+### Plot
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+ggplot(data=alldf, aes(x=config, y=time)) + 
+  geom_line(aes(group=1), colour="blue") +
+  geom_point(size=3, colour="red") + theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5)) +
+  xlab("Configuration") + ylab("Time taken (in seconds)") +
+  ggtitle("Plot comparing time taken vs configuration")
+```
+
+### Implementation
+```
+1. We have implemented a Single Thread Program, a Multi Threaded Program, A Pseudo-Distributed map 
+reduce system and a AWS EMR implementation of a map reduce system. 
+2. In the Map Reduce system, The Mapper calls the map method with "Carrier Code" as Key and a record
+of a csv file as Value.
+3. The record is checked for sanity tests and Intermediate Key, Value Pairs are sent to the Reducer
+4. The Key is the carrier code of the record. The Intermediate value is a Text object containing the 
+price, Month and Year of a single record.
+5. The reducer calls the reduce method passing an iterable of values. The reducer calculates 
+the mean/median/fast median price of a carrier per Month and outputs to a specific output file.
+6. The R script reads the multiple time files and plots a line graph comparing the time 
+performance(in seconds)
+for all the different configurations.
+7. Plot is drawn with ggplot2 package.
+8. Make file is created to automate all the above steps.
+```
