@@ -1,18 +1,20 @@
 
 public class Flight {
 	
-	private String location;
-	public String getLocation() {
-		return location;
-	}
-	public void setLocation(String location) {
-		this.location = location;
-	}
 	private String depTime;
 	private String arrTime;
 	private String crsDepTime;
 	private String crsArrTime;
 	private String cancelled;
+
+	/*	Flight(){
+		this.depTime = null;
+		this.arrTime = null;
+		this.crsDepTime = null;
+		this.crsArrTime = null;
+		this.cancelled = null;
+	}*/
+
 	public String getDepTime() {
 		return depTime;
 	}
