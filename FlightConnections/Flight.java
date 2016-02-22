@@ -1,48 +1,59 @@
-
+/**
+ * This class acts as a POJO class for Flight data. This class contains the 
+ * fields that are sent as values from the Mapper to Reducer class in the MR Job.
+ * @author Afan, Abhijeet
+ * Version 1.0
+ *
+ */
 public class Flight {
-	
-	private String depTime;
-	private String arrTime;
-	private String crsDepTime;
-	private String crsArrTime;
+	private String key;
+	private String crsTime;
+	private String actualTime;
 	private String cancelled;
-
-	/*	Flight(){
-		this.depTime = null;
-		this.arrTime = null;
-		this.crsDepTime = null;
-		this.crsArrTime = null;
-		this.cancelled = null;
-	}*/
-
-	public String getDepTime() {
-		return depTime;
+	private String location;
+	private String type;
+	
+	public String getActualTime() {
+		return actualTime;
 	}
-	public void setDepTime(String depTime) {
-		this.depTime = depTime;
+	public void setActualTime(String actualTime) {
+		this.actualTime = actualTime;
 	}
-	public String getArrTime() {
-		return arrTime;
+	public String getCrsTime() {
+		return crsTime;
 	}
-	public void setArrTime(String arrTime) {
-		this.arrTime = arrTime;
+	public void setCrsTime(String crsTime) {
+		this.crsTime = crsTime;
 	}
-	public String getCrsDepTime() {
-		return crsDepTime;
+	public String getKey() {
+		return key;
 	}
-	public void setCrsDepTime(String crsDepTime) {
-		this.crsDepTime = crsDepTime;
+	public void setKey(String key) {
+		this.key = key;
 	}
-	public String getCrsArrTime() {
-		return crsArrTime;
+	public String getLocation() {
+		return location;
 	}
-	public void setCrsArrTime(String crsArrTime) {
-		this.crsArrTime = crsArrTime;
+	public void setLocation(String location) {
+		this.location = location;
 	}
 	public String getCancelled() {
 		return cancelled;
 	}
 	public void setCancelled(String cancelled) {
 		this.cancelled = cancelled;
+	}
+	public String getType() {
+		return type;
+	}
+	public void setType(String type) {
+		this.type = type;
+	}
+	
+	/**
+	 * Overriding the toString method to return the appended String values
+	 */
+	public String toString() {
+		return crsTime + "\t" + actualTime + "\t" + cancelled + "\t" + location + "\t" + type;
 	}
 }

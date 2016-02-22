@@ -23,5 +23,5 @@ while clusterStatus $1
 do
 sleep 20
 done
-echo -e `aws s3 sync s3://$2/logs/$clusterid/hadoop-mapreduce/history logs/$3`
+#echo -e `aws s3 sync s3://$2/logs/$clusterid/hadoop-mapreduce/history logs/$3`
 echo "Complete"
