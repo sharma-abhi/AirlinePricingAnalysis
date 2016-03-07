@@ -9,8 +9,7 @@
 clusterid=$1
 echo $clusterid
 clusterStatus() {
-	value=`aws emr list-clusters --terminated --query "Clusters[*].{Ids:Id, codes:Status.StateChangeReason.Code}[?Ids=='$clusterid' && codes=='ALL_STEPS_COMPLETED'].codes" --output text`
-	#echo $value
+	value=`aws emr list-clusters --cluster-states WAITING --query "Clusters[*].Id" --output text`
 	if [ -w $value ]
 	then
 	 return 0
@@ -23,5 +22,4 @@ while clusterStatus $1
 do
 sleep 20
 done
-#echo -e `aws s3 sync s3://$2/logs/$clusterid/hadoop-mapreduce/history logs/$3`
 echo "Complete"

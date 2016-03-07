@@ -1,21 +1,16 @@
 import java.io.IOException;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Reducer;
-import org.apache.hadoop.mapreduce.Reducer.Context;
-
-public class FlightReducerSingle extends Reducer<Text, Text, Text, Text>{
+/*
+ * <h1>Hadoop Reducer</h1>
+ * The PreProcessReducer is responsible for simply writing the output to text files. 
+ * @author: Sharma, Abhijeet and Khan, Afan Ahmad
+ * @version: 4.0
+ * @since: January 28, 2016
+ */
+public class PreProcessReducer extends Reducer<Text, Text, Text, Text>{
 		/**
-		 * Reduce method  -  This method writes the key(flight code and year) and the values
-		 * (average price and scheduled flight time) to the output
-		 * 
+		 * Reduce method  -  This method writes the key and the values to the output
 		 * @param key Key sent by Mapper
 		 * @param values Iterable of values sent by Mapper
 		 * @param context context object sent by Job
