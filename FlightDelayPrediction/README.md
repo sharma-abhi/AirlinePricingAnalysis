@@ -1,6 +1,4 @@
 Author: Abhijeet Sharma and Afan Ahmad Khan
-Email: sharma.abhi@husky.neu.edu
-Phone: (617)373-0355
 Date created: March 6, 2016
 
 DESCRIPTION
