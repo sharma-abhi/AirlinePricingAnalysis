@@ -44,7 +44,6 @@ validationFile=${localInputPath}/${localMainInputDir}/${localValidationInputDir}
 ## Spark Output
 FeatureImportancesFile=${localOutputPath}/${localMainOutputDir}/FeatureImportances
 TestPredictionsFile=${localOutputPath}/${localMainOutputDir}/TestPredictions
-ModelMetricsFile=${localOutputPath}/${localMainOutputDir}/ModelMetrics
 
 # CLOUD AWS CONFIGURATION
 awsRegion=us-east-1a
@@ -67,7 +66,6 @@ awsSparkInputValidationFile=${awsInputValidationFilePath}/98validate.csv.gz
 ## AWS Spark Output (for Machine Learning)
 awsSparkOutputFeatureImportancesFile=s3://${awsBucketName}/${awsMainOutputDir}/FeatureImportances
 awsSparkOutputTestPredictionsFile=s3://${awsBucketName}/${awsMainOutputDir}/TestPredictions
-awsSparkOutputModelMetricsFile=s3://${awsBucketName}/${awsMainOutputDir}/ModelMetrics
 ############### END CONFIGURATION ##################
 
 # UTILITY
@@ -77,6 +75,9 @@ format:
 ## Leave safe-mode if Hadoop gets stuck in safemode 
 unsafe:
 	hdfs dfsadmin -safemode leave
+## Terminate cluster	
+terminate:	
+	aws emr terminate-clusters --cluster-ids `cat clusterId.txt`
 
 # RUNNING PIPELINE IN LOCAL MACHINE
 ## Start HDFS, YARN and History Server
@@ -97,7 +98,7 @@ hadoop-upload:
 	hadoop fs -put ${localInputPath}/${localMainInputDir} ${hdfsRootPath}/${hdfsMainInputDir}
 ## preprocessing train files
 hadoop-preprocess-train:
-	rm -rf ${localOutputPath}/${localMainOutputDir}/${hdfsTrainOutputDir}
+	rm -rf ${localOutputPath}/${localMainOutputDir}
 	javac -cp commons-lang3-3.4.jar:/usr/local/hadoop/share/hadoop/mapreduce/lib/hadoop-annotations-${hadoopVersion}.jar:/usr/local/hadoop/share/hadoop/common/hadoop-common-${hadoopVersion}.jar:/usr/local/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-core-${hadoopVersion}.jar: ${HadoopDriver}.java
 	jar cf ${HadoopJarName} *.class
 	hadoop fs -rm -r -f ${hdfsRootPath}/${hdfsMainOutputDir}/${hdfsTrainOutputDir}
@@ -119,21 +120,23 @@ hadoop-preprocess-test:
 hadoop-preprocess:	hadoop-preprocess-train hadoop-preprocess-test	
 ## running machine learning in Spark (local)
 spark-ml:
+	rm -rf ${FeatureImportancesFile}
+	rm -rf ${TestPredictionsFile}
 	cd SparkModel && sbt clean package
 	cd SparkModel && mv target/scala*/*.jar ${SparkJarName}
-	cd SparkModel && spark-submit --master local[*] --driver-memory 5g --executor-memory 1g ${SparkJarName} ${preProcessedTrainFile} ${preProcessedTestFile} ${validationFile} ${FeatureImportancesFile} ${TestPredictionsFile} ${ModelMetricsFile}
+	cd SparkModel && spark-submit --master local[*] --driver-memory 5g --executor-memory 1g ${SparkJarName} ${preProcessedTrainFile} ${preProcessedTestFile} ${validationFile} ${FeatureImportancesFile} ${TestPredictionsFile}
+	cat ${TestPredictionsFile}/part-* > ${TestPredictionsFile}/final-predictions
 ## Generate Report
 report:
-	Rscript -e "rmarkdown::render('Assignment6_Report.Rmd')" ${localOutputPath}/${localMainOutputDir}\
+	Rscript -e "rmarkdown::render('Assignment6_Report.Rmd')" ${TestPredictionsFile}
 ## Run Whole Pipeline in Local Machine (make sure hadoop-start, hadoop-setup and hadoop-upload is already executed)
-run-pipeline-local:hadoop-preprocess spark-ml 
+run-pipeline-local: hadoop-preprocess spark-ml report
 
 # RUNNING PIPELINE IN AWS SERVER
 ## Setup S3 bucket
 cloud-setup:
 	aws s3 mb s3://${awsBucketName}
-## Upload Spark Configuration JSON file to S3 bucket (MAKE SURE TO GRANT ALL PERMISSIONS TO EVERYONE FOR JSON FILE IN S3 !!)
-cloud-preprocess:
+cloud:
 	javac -cp commons-lang3-3.4.jar:/usr/local/hadoop/share/hadoop/mapreduce/lib/hadoop-annotations-${hadoopVersion}.jar:/usr/local/hadoop/share/hadoop/common/hadoop-common-${hadoopVersion}.jar:/usr/local/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-core-${hadoopVersion}.jar:  ${HadoopDriver}.java
 	jar cf ${HadoopJarName} *.class
 	aws s3 rm s3://${awsBucketName}/${awsMainOutputDir} --recursive
@@ -155,13 +158,12 @@ cloud-preprocess:
 	cd SparkModel && sbt clean package
 	cd SparkModel && mv target/scala*/*.jar ${SparkJarName}
 	cd SparkModel && aws s3 cp ${SparkJarName} s3://${awsBucketName}
-	aws emr add-steps --cluster-id `cat clusterId.txt` --steps Type=Spark,Name="Spark Model",ActionOnFailure=CONTINUE,Args=[--master,yarn-cluster,--deploy-mode,cluster,--class,${SparkDriver},s3n://${awsBucketName}/${SparkJarName},${awsSparkInputTrainFile},${awsSparkInputTestFile},${awsSparkInputValidationFile},${awsSparkOutputFeatureImportancesFile},${awsSparkOutputTestPredictionsFile},${awsSparkOutputModelMetricsFile}]
-	sleep 20;
+	aws emr add-steps --cluster-id `cat clusterId.txt` --steps Type=Spark,Name="Spark Model",ActionOnFailure=CONTINUE,Args=[--deploy-mode,cluster,--class,${SparkDriver},s3n://${awsBucketName}/${SparkJarName},${awsSparkInputTrainFile},${awsSparkInputTestFile},${awsSparkInputValidationFile},${awsSparkOutputFeatureImportancesFile},${awsSparkOutputTestPredictionsFile}]
+	sleep 60;
 	sh clusterWaitingCheck.sh `cat clusterId.txt`
 	aws s3 cp ${awsSparkOutputFeatureImportancesFile} ${FeatureImportancesFile} --recursive
 	aws s3 cp ${awsSparkOutputTestPredictionsFile} ${TestPredictionsFile} --recursive
-	aws s3 cp ${awsSparkOutputModelMetricsFile} ${ModelMetricsFile} --recursive
-	aws emr terminate-clusters --cluster-ids `cat clusterId.txt`
 	cat ${TestPredictionsFile}/part-* > ${TestPredictionsFile}/final-predictions
+	aws emr terminate-clusters --cluster-ids `cat clusterId.txt`
 ## Run Whole Pipeline in AWS EMR (make sure cloud-setup is already executed and "Default output format" on running "aws configure" is set as "text")
-run-pipeline-cloud: cloud-preprocess cloud-spark
+run-pipeline-cloud: cloud report

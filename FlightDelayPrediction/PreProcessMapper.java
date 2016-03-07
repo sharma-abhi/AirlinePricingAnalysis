@@ -46,22 +46,22 @@ public class PreProcessMapper extends Mapper<Object, Text, Text, Text>{
 				// Code 0 is returned when the flight is sane
 				if (code.equals(0)){
 					try{
-						// Setting the unique carrier code as key
-						String mapKey = flightRecordList[6];
+						// Setting the unique Flight Number as key
+						String mapKey = flightRecordList[10];
 						String features = "";
 						if (isTestJob){
 							//create the test data id(for join with validation data in Spark)
 							features = 	flightRecordList[10] + "_" + flightRecordList[5] + "_" + flightRecordList[29] + "\t"; 
 						}
-						features += flightRecordList[0] + "\t" + flightRecordList[1] + "\t" + 
-									flightRecordList[2] + "\t" +
-									binDayToWeek(flightRecordList[3]) + "\t" + 
-									flightRecordList[4] + "\t" + 
-									isPopularAirport(flightRecordList[14]) + "\t" + 
-									isPopularAirport(flightRecordList[23])  + "\t" + 
-									binScheduledTime(flightRecordList[29]) + "\t" + 
-									binScheduledTime(flightRecordList[40])  + "\t" + 
-									flightRecordList[50] + "\t" + flightRecordList[55];
+						features += flightRecordList[1] + "\t" + 						// Quarter
+									flightRecordList[2] + "\t" +						// Month
+									binDayToWeek(flightRecordList[3]) + "\t" + 			// WeekNo from DayOfMonth
+									flightRecordList[4] + "\t" + 						// DayOfWeek
+									isPopularAirport(flightRecordList[14]) + "\t" + 	// Origin Airport == Popular?
+									isPopularAirport(flightRecordList[23])  + "\t" + 	// Dest Airport == Popular?
+									binScheduledTime(flightRecordList[29]) + "\t" + 	// CRS_DEP_TIME hour
+									binScheduledTime(flightRecordList[40])  + "\t" + 	// CRS_ARR_TIME hour
+									flightRecordList[55];								// Distance Group
 						if (isTestJob){
 							context.write(new Text(mapKey), new Text(features));
 						}
@@ -103,11 +103,11 @@ public class PreProcessMapper extends Mapper<Object, Text, Text, Text>{
 
 		public static String binScheduledTime(String scheduledTime){
 			/**
-			 * Bins time into 4 bins (division by 600).
+			 * Bins time into 24 bins (division by 100).
 			 * @param	scheduledTime time in hhmm format as String.
 			 * @return	Bin of the given given time 
 			 */
-			Integer time = Integer.parseInt(scheduledTime)/600;
+			Integer time = Integer.parseInt(scheduledTime)/100;
 			return time.toString();
 		}
 

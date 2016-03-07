@@ -17,8 +17,8 @@ import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorIndexer,
 object SparkModel{ 
     // DataFrame Scheme for Training, Test and Validation dataset.
     // (required to be mentioned outside of main method)
-    case class Flight(carrier: String, year: Double, quarter:Double, month:Double, week:Double, dayOfMonth:Double, popularOrigin: Double, popularDest: Double, crsDepGroup: Double, crsArrGroup:Double, crsElapsed:Double, distanceGroup:Double, label:Double)
-    case class FlightTest(carrier: String, id: String, year: Double, quarter:Double, month:Double, week:Double, dayOfMonth:Double, popularOrigin: Double, popularDest: Double, crsDepGroup: Double, crsArrGroup:Double, crsElapsed:Double, distanceGroup:Double)
+    case class Flight(carrier: Double, quarter:Double, month:Double, week:Double, dayOfWeek:Double, popularOrigin: Double, popularDest: Double, crsDepGroup: Double, crsArrGroup:Double, distanceGroup:Double, label:Double)
+    case class FlightTest(carrier: Double, id: String, quarter:Double, month:Double, week:Double, dayOfWeek:Double, popularOrigin: Double, popularDest: Double, crsDepGroup: Double, crsArrGroup:Double, distanceGroup:Double)
     case class FlightVal(id: String, logicalLabel: String)//label:Double)
     /**
     * Main Function of object.
@@ -46,20 +46,18 @@ object SparkModel{
         val validateFile = args(2);
         val featureImportancesPath = args(3);
         val testPredictionsPath = args(4);
-        val metricsPath = args(5);
         // Creating train dataframe
         val inputDf = sc.textFile(trainFile).
             map(_.split("\t")).
-            map(f => Flight(f(0), f(1).toDouble, f(2).toDouble, f(3).toDouble, 
+            map(f => Flight(f(0).toDouble, f(1).toDouble, f(2).toDouble, f(3).toDouble, 
                 f(4).toDouble, f(5).toDouble, f(6).toDouble, f(7).toDouble, 
-                f(8).toDouble, f(9).toDouble, f(10).toDouble, f(11).toDouble, 
-                f(12).toDouble)).
+                f(8).toDouble, f(9).toDouble, f(10).toDouble)).
             toDF()
         // Assembling feature columns as "features"
         val assembler = new VectorAssembler().
-            setInputCols(Array("quarter", "month", "week", "dayOfMonth", 
+            setInputCols(Array("carrier", "quarter", "month", "week", "dayOfWeek", 
                 "popularOrigin", "popularDest", "crsDepGroup", "crsArrGroup", 
-                "crsElapsed", "distanceGroup")).
+                "distanceGroup")).
             setOutputCol("features")
         val trainingData = assembler.transform(inputDf)
         // Indexing labels, adding metadata to the label column.
@@ -71,7 +69,7 @@ object SparkModel{
         val featureIndexer = new VectorIndexer().
             setInputCol("features").
             setOutputCol("indexedFeatures").
-            setMaxCategories(5).            // features with > 5 distinct values are treated as continuous
+            setMaxCategories(4).            // features with > 24 distinct values are treated as continuous
             fit(trainingData) 
         // Setting up Random Forest Model
         val rf  = new RandomForestClassifier().
@@ -81,12 +79,8 @@ object SparkModel{
             setFeatureSubsetStrategy("auto"). //letting model figure out optimal strategy
             setImpurity("gini").
             setMaxDepth(4).
-            setMaxBins(12).
+            setMaxBins(4).
             setSeed(seed)
-        /*val gbt = new GBTClassifier().
-        setLabelCol(labelIndexer.getOutputCol).
-        setFeaturesCol(featuresIndexer.getOutputCol).
-        setMaxIter(10)*/
         // Convert indexed labels back to original labels.
         val labelConverter = new IndexToString().
             setInputCol("prediction").
@@ -97,12 +91,6 @@ object SparkModel{
             setStages(Array(labelIndexer, featureIndexer, rf, labelConverter))
         // Running the pipeline.
         val model = pipeline.fit(trainingData)
-        /*// Predict on Training data.
-        val trainPredictions = model.transform(trainingData)       
-        // Select (prediction, true label) and compute training error
-        val precisionEvaluator = new MulticlassClassificationEvaluator().setLabelCol("indexedLabel").setPredictionCol("prediction").setMetricName("precision")
-        val trainPrecision = precisionEvaluator.evaluate(trainPredictions)
-        println("Training Error = " + (1.0 - trainPrecision))*/
         // Output Feature Importances to File(s)
         val rfModel = model.stages(2).asInstanceOf[RandomForestClassificationModel]
         sc.parallelize(rfModel.
@@ -111,11 +99,10 @@ object SparkModel{
         // Creating test dataframe
         val testDf = sc.textFile(testFile).
                         map(_.split("\t")).
-                        map(f => FlightTest(f(0), f(1), f(2).toDouble, 
+                        map(f => FlightTest(f(0).toDouble, f(1), f(2).toDouble, 
                             f(3).toDouble, f(4).toDouble, f(5).toDouble, 
                             f(6).toDouble, f(7).toDouble, f(8).toDouble, 
-                            f(9).toDouble, f(10).toDouble, f(11).toDouble, 
-                            f(12).toDouble)).
+                            f(9).toDouble, f(10).toDouble)).
                         toDF()
         //Fetch the Validation File which has the actual values
         val validateDf = sc.textFile(validateFile).
@@ -136,27 +123,6 @@ object SparkModel{
         testPredictions.select("id", "label", "predictedLabel").
                         rdd.        // convert from Dataframe to RDD for saving as Text File
                         saveAsTextFile(testPredictionsPath) // Save Predictons        
-        /*        // Evaluate Test Predictions
-        val precisionEvaluator = new MulticlassClassificationEvaluator().
-                                    setLabelCol("indexedLabel").
-                                    setPredictionCol("prediction").
-                                    setMetricName("precision")
-        val testPrecision = precisionEvaluator.evaluate(testPredictions) // precision
-        
-        val recallEvaluator = new MulticlassClassificationEvaluator().
-                                setLabelCol("indexedLabel").
-                                setPredictionCol("prediction").
-                                setMetricName("recall")
-        val testRecall = recallEvaluator.evaluate(testPredictions) // recall
-        
-        val f1Evaluator = new MulticlassClassificationEvaluator().
-                            setLabelCol("indexedLabel").
-                            setPredictionCol("prediction").
-                            setMetricName("f1")
-        val testF1 = f1Evaluator.evaluate(testPredictions) // F-1
-        // Output Metrics as a List
-        sc.parallelize(List(testPrecision, testRecall, testF1), 1).
-            saveAsTextFile(metricsPath)*/
         sc.stop()   //stop spark context        
     }
 }
